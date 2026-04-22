@@ -1,0 +1,209 @@
+{% extends "base.html" %}
+{% block title %}Collecte · DataAnalyst{% endblock %}
+{% block page_title %}Collecte de données{% endblock %}
+
+{% block content %}
+<div class="collect-layout">
+
+  <!-- LEFT : Add product form -->
+  <div class="card collect-form-card">
+    <div class="card-header">
+      <h2 class="card-title"><i data-lucide="plus-circle"></i> Nouveau produit</h2>
+    </div>
+
+    <form id="form-product" class="form-stack">
+      <div class="form-group">
+        <label class="form-label" for="inp-name">Nom du produit *</label>
+        <input class="form-input" id="inp-name" type="text" placeholder="ex: iPhone 15 Pro" required>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label" for="inp-category">Catégorie *</label>
+          <select class="form-input" id="inp-category" required>
+            <option value="">-- Sélectionner --</option>
+            <option>Smartphone</option>
+            <option>Laptop</option>
+            <option>Casque Audio</option>
+            <option>TV</option>
+            <option>Tablette</option>
+            <option>Enceinte</option>
+            <option>Autre</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="inp-brand">Marque *</label>
+          <input class="form-input" id="inp-brand" type="text" placeholder="ex: Apple">
+        </div>
+      </div>
+
+      <!-- Prices -->
+      <div class="section-divider"><i data-lucide="tag"></i> Prix par concurrent</div>
+      <div id="price-rows">
+        <div class="price-row">
+          <input class="form-input" type="text" placeholder="Concurrent (ex: Amazon)">
+          <input class="form-input" type="number" placeholder="Prix (€)" min="0" step="0.01">
+          <button type="button" class="btn-icon btn-remove" onclick="removePriceRow(this)"><i data-lucide="x"></i></button>
+        </div>
+      </div>
+      <button type="button" class="btn btn-ghost btn-sm" onclick="addPriceRow()">
+        <i data-lucide="plus"></i> Ajouter concurrent
+      </button>
+
+      <!-- Reviews -->
+      <div class="section-divider"><i data-lucide="star"></i> Avis clients</div>
+      <div id="review-rows">
+        <div class="review-row">
+          <input class="form-input" type="number" placeholder="Note (1-5)" min="1" max="5" step="0.1">
+          <input class="form-input" type="number" placeholder="Nb avis" min="0">
+          <input class="form-input" type="text" placeholder="Source (Amazon...)">
+          <button type="button" class="btn-icon btn-remove" onclick="removeReviewRow(this)"><i data-lucide="x"></i></button>
+        </div>
+      </div>
+      <button type="button" class="btn btn-ghost btn-sm" onclick="addReviewRow()">
+        <i data-lucide="plus"></i> Ajouter source d'avis
+      </button>
+
+      <!-- Specs -->
+      <div class="section-divider"><i data-lucide="settings"></i> Caractéristiques techniques</div>
+      <div id="spec-rows">
+        <div class="spec-row">
+          <input class="form-input" type="text" placeholder="Clé (ex: RAM)">
+          <input class="form-input" type="text" placeholder="Valeur (ex: 8 Go)">
+          <button type="button" class="btn-icon btn-remove" onclick="removeSpecRow(this)"><i data-lucide="x"></i></button>
+        </div>
+      </div>
+      <button type="button" class="btn btn-ghost btn-sm" onclick="addSpecRow()">
+        <i data-lucide="plus"></i> Ajouter caractéristique
+      </button>
+
+      <button type="submit" class="btn btn-primary btn-lg" style="margin-top:1.5rem">
+        <i data-lucide="save"></i> Enregistrer le produit
+      </button>
+    </form>
+  </div>
+
+  <!-- RIGHT : Products list -->
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title"><i data-lucide="package"></i> Produits enregistrés</h2>
+      <button class="btn btn-ghost btn-sm" onclick="loadProducts()">
+        <i data-lucide="refresh-cw"></i> Rafraîchir
+      </button>
+    </div>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Nom</th>
+            <th>Catégorie</th>
+            <th>Marque</th>
+            <th>Note</th>
+            <th>Prix moy.</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="products-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function addPriceRow() {
+  document.getElementById("price-rows").insertAdjacentHTML("beforeend", `
+    <div class="price-row">
+      <input class="form-input" type="text" placeholder="Concurrent">
+      <input class="form-input" type="number" placeholder="Prix (€)" min="0" step="0.01">
+      <button type="button" class="btn-icon btn-remove" onclick="removePriceRow(this)"><i data-lucide="x"></i></button>
+    </div>`);
+  refreshIcons();
+}
+function removePriceRow(btn) { btn.closest(".price-row").remove(); }
+
+function addReviewRow() {
+  document.getElementById("review-rows").insertAdjacentHTML("beforeend", `
+    <div class="review-row">
+      <input class="form-input" type="number" placeholder="Note (1-5)" min="1" max="5" step="0.1">
+      <input class="form-input" type="number" placeholder="Nb avis" min="0">
+      <input class="form-input" type="text" placeholder="Source">
+      <button type="button" class="btn-icon btn-remove" onclick="removeReviewRow(this)"><i data-lucide="x"></i></button>
+    </div>`);
+  refreshIcons();
+}
+function removeReviewRow(btn) { btn.closest(".review-row").remove(); }
+
+function addSpecRow() {
+  document.getElementById("spec-rows").insertAdjacentHTML("beforeend", `
+    <div class="spec-row">
+      <input class="form-input" type="text" placeholder="Clé">
+      <input class="form-input" type="text" placeholder="Valeur">
+      <button type="button" class="btn-icon btn-remove" onclick="removeSpecRow(this)"><i data-lucide="x"></i></button>
+    </div>`);
+  refreshIcons();
+}
+function removeSpecRow(btn) { btn.closest(".spec-row").remove(); }
+
+// Form submit
+document.getElementById("form-product").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const name     = document.getElementById("inp-name").value.trim();
+  const category = document.getElementById("inp-category").value.trim();
+  const brand    = document.getElementById("inp-brand").value.trim();
+  if (!name || !category || !brand) return showToast("Remplissez tous les champs obligatoires", "error");
+
+  const res = await postJSON("/api/product", { name, category, brand });
+  if (res.error) return showToast(res.error, "error");
+  const pid = res.product_id;
+
+  for (const row of document.querySelectorAll(".price-row")) {
+    const [comp, price] = row.querySelectorAll("input");
+    if (comp.value && price.value) await postJSON("/api/price", { product_id: pid, competitor: comp.value, price: parseFloat(price.value) });
+  }
+  for (const row of document.querySelectorAll(".review-row")) {
+    const [stars, count, source] = row.querySelectorAll("input");
+    if (stars.value) await postJSON("/api/review", { product_id: pid, stars: parseFloat(stars.value), review_count: parseInt(count.value)||0, source: source.value||"Manuel" });
+  }
+  for (const row of document.querySelectorAll(".spec-row")) {
+    const [key, val] = row.querySelectorAll("input");
+    if (key.value && val.value) await postJSON("/api/spec", { product_id: pid, spec_key: key.value, spec_value: val.value });
+  }
+
+  showToast(`Produit "${name}" enregistré avec succès`, "success");
+  e.target.reset();
+  loadProducts();
+});
+
+async function loadProducts() {
+  const products = await fetchJSON("/api/products");
+  const tbody = document.getElementById("products-tbody");
+  tbody.innerHTML = "";
+  products.forEach(p => {
+    const stars = p.avg_stars ? `${"★".repeat(Math.round(p.avg_stars))}${"☆".repeat(5-Math.round(p.avg_stars))} ${p.avg_stars}` : "—";
+    tbody.insertAdjacentHTML("beforeend", `
+      <tr>
+        <td><strong>${p.name}</strong></td>
+        <td><span class="badge">${p.category}</span></td>
+        <td>${p.brand}</td>
+        <td><span class="stars">${stars}</span></td>
+        <td>${p.avg_price ? p.avg_price + " €" : "—"}</td>
+        <td>
+          <button class="btn-icon btn-danger" title="Supprimer" onclick="deleteProduct(${p.id}, '${p.name.replace(/'/g,"\\'")}')">
+            <i data-lucide="trash-2"></i>
+          </button>
+        </td>
+      </tr>`);
+  });
+  refreshIcons();
+}
+
+async function deleteProduct(id, name) {
+  if (!confirm(`Supprimer "${name}" ?`)) return;
+  const r = await fetch(`/api/product/${id}`, { method: "DELETE" });
+  if (r.ok) { showToast(`"${name}" supprimé`, "info"); loadProducts(); }
+}
+
+loadProducts();
+</script>
+{% endblock %}

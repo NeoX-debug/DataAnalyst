@@ -1,0 +1,257 @@
+{% extends "base.html" %}
+{% block title %}Classification · DataAnalyst{% endblock %}
+{% block page_title %}Classification ML{% endblock %}
+
+{% block content %}
+<div class="info-banner">
+  <span class="info-icon"><i data-lucide="cpu"></i></span>
+  <div>
+    <strong>Random Forest Classifier</strong> · Un produit est
+    <span class="tag-popular">populaire</span> si note ≥ 4.0 et nombre d'avis ≥ 50.
+    Features : note moy., nb avis, prix moy., écart-type prix, nb concurrents.
+  </div>
+</div>
+
+<div class="charts-row">
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title"><i data-lucide="target"></i> Entraînement du modèle</h2>
+    </div>
+    <div class="train-panel">
+      <button class="btn btn-primary btn-lg" id="btn-train" onclick="trainModel()">
+        <i data-lucide="play"></i> Entraîner le modèle
+      </button>
+      <div id="train-status" class="train-status-msg"></div>
+      <div id="metrics-grid" class="metrics-grid hidden">
+        <div class="metric-box"><div class="metric-val" id="m-acc">—</div><div class="metric-lbl">Accuracy</div></div>
+        <div class="metric-box"><div class="metric-val" id="m-cv">—</div><div class="metric-lbl">CV Score</div></div>
+        <div class="metric-box"><div class="metric-val" id="m-pop">—</div><div class="metric-lbl">Populaires</div></div>
+        <div class="metric-box"><div class="metric-val" id="m-npop">—</div><div class="metric-lbl">Non-pop.</div></div>
+      </div>
+    </div>
+    <div id="feat-section" class="hidden" style="margin-top:1.5rem">
+      <div class="card-header" style="padding:0 0 0.75rem 0">
+        <h3 class="card-title" style="font-size:0.9rem"><i data-lucide="sliders"></i> Importance des features</h3>
+      </div>
+      <div id="feat-bars"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title"><i data-lucide="grid"></i> Matrice de confusion</h2>
+    </div>
+    <div id="cm-wrap" class="cm-wrap hidden">
+      <table class="cm-table" id="cm-table"></table>
+      <div class="cm-legend">
+        <span class="cm-tp">TP</span> Vrai Positif &nbsp;
+        <span class="cm-tn">TN</span> Vrai Négatif &nbsp;
+        <span class="cm-fp">FP</span> Faux Positif &nbsp;
+        <span class="cm-fn">FN</span> Faux Négatif
+      </div>
+    </div>
+    <div id="cm-placeholder" class="empty-state">Entraînez le modèle pour voir la matrice</div>
+    <div id="feat-chart-wrap" class="hidden" style="margin-top:1.5rem">
+      <div class="card-header" style="padding:0 0 0.75rem 0">
+        <h3 class="card-title" style="font-size:0.9rem"><i data-lucide="bar-chart"></i> Visualisation importance</h3>
+      </div>
+      <div style="height:200px"><canvas id="chart-features"></canvas></div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <h2 class="card-title"><i data-lucide="zap"></i> Prédire un nouveau produit</h2>
+  </div>
+  <form id="form-predict" class="predict-form">
+    <div class="predict-fields">
+      <div class="form-group">
+        <label class="form-label" for="p-stars">Note moyenne</label>
+        <input class="form-input" id="p-stars" type="number" min="1" max="5" step="0.1" value="4.2" required>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="p-reviews">Nombre d'avis</label>
+        <input class="form-input" id="p-reviews" type="number" min="0" value="120" required>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="p-price">Prix moyen (€)</label>
+        <input class="form-input" id="p-price" type="number" min="0" step="0.01" value="299.99" required>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="p-std">Écart-type prix (€)</label>
+        <input class="form-input" id="p-std" type="number" min="0" step="0.01" value="25.00">
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="p-comp">Nb concurrents</label>
+        <input class="form-input" id="p-comp" type="number" min="1" value="4">
+      </div>
+      <div class="form-group predict-action">
+        <label class="form-label">&nbsp;</label>
+        <button type="submit" class="btn btn-primary">
+          <i data-lucide="zap"></i> Prédire
+        </button>
+      </div>
+    </div>
+  </form>
+  <div id="predict-result" class="predict-result hidden"></div>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <h2 class="card-title"><i data-lucide="list"></i> Classification de tous les produits</h2>
+    <button class="btn btn-ghost btn-sm" onclick="loadPredictions()">
+      <i data-lucide="refresh-cw"></i> Actualiser
+    </button>
+  </div>
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Produit</th><th>Catégorie</th><th>Note moy.</th>
+          <th>Nb Avis</th><th>Prix moy.</th>
+          <th>Étiquette réelle</th><th>Prédiction ML</th><th>Confiance</th>
+        </tr>
+      </thead>
+      <tbody id="pred-tbody"></tbody>
+    </table>
+  </div>
+  <div id="pred-empty" class="empty-state">Entraînez le modèle pour voir les prédictions</div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let featChart = null;
+
+async function trainModel() {
+  const btn = document.getElementById("btn-train");
+  btn.disabled = true;
+  btn.innerHTML = '<i data-lucide="loader"></i> Entraînement…';
+  refreshIcons();
+  document.getElementById("train-status").textContent = "";
+
+  const res = await postJSON("/api/train", {});
+  btn.disabled = false;
+  btn.innerHTML = '<i data-lucide="refresh-cw"></i> Ré-entraîner le modèle';
+  refreshIcons();
+
+  if (res.error) {
+    document.getElementById("train-status").textContent = res.error;
+    document.getElementById("train-status").className = "train-status-msg error";
+    return;
+  }
+
+  document.getElementById("m-acc").textContent  = res.accuracy + "%";
+  document.getElementById("m-cv").textContent   = res.cv_mean + "% ±" + res.cv_std + "%";
+  document.getElementById("m-pop").textContent  = res.n_popular;
+  document.getElementById("m-npop").textContent = res.n_not_popular;
+  document.getElementById("metrics-grid").classList.remove("hidden");
+  document.getElementById("train-status").textContent = `Modèle entraîné sur ${res.n_samples} produits`;
+  document.getElementById("train-status").className = "train-status-msg success";
+
+  // Feature importance bars
+  document.getElementById("feat-section").classList.remove("hidden");
+  const featBars = document.getElementById("feat-bars");
+  featBars.innerHTML = "";
+  const labels = {avg_stars:"Note moy.",total_reviews:"Nb Avis",avg_price:"Prix moy.",price_std:"Écart-type",competitor_count:"Concurrents"};
+  const sorted = Object.entries(res.feature_importance).sort((a,b)=>b[1]-a[1]);
+  sorted.forEach(([k,v]) => {
+    const pct = (v*100).toFixed(1);
+    featBars.insertAdjacentHTML("beforeend", `
+      <div class="feat-bar-row">
+        <div class="feat-bar-label">${labels[k]||k}</div>
+        <div class="feat-bar-track"><div class="feat-bar-fill" style="width:${pct}%"></div></div>
+        <div class="feat-bar-val">${pct}%</div>
+      </div>`);
+  });
+
+  // Confusion matrix
+  const cm = res.confusion_matrix;
+  document.getElementById("cm-placeholder").classList.add("hidden");
+  document.getElementById("cm-wrap").classList.remove("hidden");
+  const lbls = ["Non-pop.","Populaire"];
+  let html = `<tr><th></th>${lbls.map(l=>`<th>Prédit : ${l}</th>`).join("")}</tr>`;
+  cm.forEach((row,i) => {
+    html += `<tr><th>Réel : ${lbls[i]}</th>`;
+    row.forEach((val,j) => {
+      const cls = (i===0&&j===0)?"cm-tn":(i===1&&j===1)?"cm-tp":(i===0&&j===1)?"cm-fp":"cm-fn";
+      html += `<td class="${cls}">${val}</td>`;
+    });
+    html += "</tr>";
+  });
+  document.getElementById("cm-table").innerHTML = html;
+
+  document.getElementById("feat-chart-wrap").classList.remove("hidden");
+  if (featChart) featChart.destroy();
+  featChart = new Chart(document.getElementById("chart-features"), {
+    type:"bar",
+    data:{
+      labels:sorted.map(([k])=>labels[k]||k),
+      datasets:[{label:"Importance",data:sorted.map(([,v])=>(v*100).toFixed(2)),backgroundColor:GRAD_COLORS,borderRadius:6}]
+    },
+    options:{...darkBarOptions("Importance (%)"),indexAxis:"y"}
+  });
+
+  await loadPredictions();
+}
+
+document.getElementById("form-predict").addEventListener("submit", async e => {
+  e.preventDefault();
+  const body = {
+    avg_stars:        parseFloat(document.getElementById("p-stars").value),
+    total_reviews:    parseInt(document.getElementById("p-reviews").value),
+    avg_price:        parseFloat(document.getElementById("p-price").value),
+    price_std:        parseFloat(document.getElementById("p-std").value),
+    competitor_count: parseInt(document.getElementById("p-comp").value),
+  };
+  const res = await postJSON("/api/predict", body);
+  const div = document.getElementById("predict-result");
+  div.classList.remove("hidden");
+  if (res.error) { div.innerHTML = `<div class="alert alert-error">${res.error}</div>`; return; }
+
+  const iconName = res.is_popular ? "star" : "package";
+  const cls = res.is_popular ? "popular" : "not-popular";
+  div.innerHTML = `
+    <div class="predict-card ${cls}">
+      <div class="predict-icon"><i data-lucide="${iconName}"></i></div>
+      <div>
+        <div class="predict-label">${res.prediction}</div>
+        <div class="predict-confidence">Confiance : <strong>${res.confidence}%</strong>
+          &nbsp;·&nbsp; Populaire : ${res.proba_popular}%
+          &nbsp;·&nbsp; Non-pop. : ${res.proba_not_popular}%
+        </div>
+      </div>
+    </div>`;
+  refreshIcons();
+});
+
+async function loadPredictions() {
+  const preds = await fetchJSON("/api/predictions");
+  const tbody = document.getElementById("pred-tbody");
+  const empty = document.getElementById("pred-empty");
+  tbody.innerHTML = "";
+  if (!preds.length) { empty.classList.remove("hidden"); return; }
+  empty.classList.add("hidden");
+  preds.forEach(p => {
+    const isP = p.is_popular;
+    tbody.insertAdjacentHTML("beforeend", `
+      <tr>
+        <td><strong>${p.name}</strong></td>
+        <td><span class="badge">${p.category}</span></td>
+        <td>${p.avg_stars} ★</td>
+        <td>${Number(p.total_reviews).toLocaleString()}</td>
+        <td>${p.avg_price} €</td>
+        <td><span class="tag ${p.actual_label==='Populaire'?'tag-popular':'tag-not-popular'}">${p.actual_label}</span></td>
+        <td><span class="tag ${isP?'tag-popular':'tag-not-popular'}">${p.prediction}</span></td>
+        <td>
+          <div class="confidence-bar">
+            <div class="confidence-fill" style="width:${p.confidence}%;background:${isP?'#10b981':'#8b5cf6'}"></div>
+            <span>${p.confidence}%</span>
+          </div>
+        </td>
+      </tr>`);
+  });
+}
+</script>
+{% endblock %}

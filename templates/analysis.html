@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+{% block title %}Analyse · DataAnalyst{% endblock %}
+{% block page_title %}Analyse descriptive{% endblock %}
+
+{% block content %}
+<div class="toolbar">
+  <a href="/api/export-csv" class="btn btn-ghost">
+    <i data-lucide="download"></i> Exporter CSV
+  </a>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <h2 class="card-title"><i data-lucide="bar-chart-2"></i> Statistiques par produit</h2>
+  </div>
+  <div class="table-wrap">
+    <table class="data-table" id="stats-table">
+      <thead>
+        <tr>
+          <th>Produit</th><th>Marque</th><th>Catégorie</th>
+          <th>Prix min</th><th>Prix max</th><th>Prix moy.</th>
+          <th>Écart-type</th><th>Note moy.</th><th>Nb Avis</th><th>Concurrents</th>
+        </tr>
+      </thead>
+      <tbody id="stats-tbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<div class="charts-row">
+  <div class="card chart-card">
+    <div class="card-header">
+      <h2 class="card-title"><i data-lucide="trending-down"></i> Étendue des prix par produit</h2>
+    </div>
+    <div class="chart-wrap" style="height:320px"><canvas id="chart-price-range"></canvas></div>
+  </div>
+  <div class="card chart-card">
+    <div class="card-header">
+      <h2 class="card-title"><i data-lucide="star"></i> Notes moyennes</h2>
+    </div>
+    <div class="chart-wrap" style="height:320px"><canvas id="chart-stars"></canvas></div>
+  </div>
+</div>
+
+<div class="charts-row">
+  <div class="card chart-card">
+    <div class="card-header">
+      <h2 class="card-title"><i data-lucide="building-2"></i> Comparaison prix par concurrent</h2>
+      <select class="form-input form-input-sm" id="product-select" onchange="renderCompetitorChart()">
+        <option value="">— Tous les produits —</option>
+      </select>
+    </div>
+    <div class="chart-wrap" style="height:320px"><canvas id="chart-competitor-comp"></canvas></div>
+  </div>
+  <div class="card chart-card">
+    <div class="card-header">
+      <h2 class="card-title"><i data-lucide="layers"></i> Prix moyen par catégorie</h2>
+    </div>
+    <div class="chart-wrap" style="height:320px"><canvas id="chart-cat2"></canvas></div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let _allCompPrices = [];
+let _competitorChart = null;
+
+(async () => {
+  const stats = await fetchJSON("/api/products");
+  const tbody = document.getElementById("stats-tbody");
+  stats.forEach(p => {
+    const rc = p.avg_stars >= 4 ? "#10b981" : p.avg_stars >= 3 ? "#f59e0b" : "#ef4444";
+    tbody.insertAdjacentHTML("beforeend", `<tr>
+      <td><strong>${p.name}</strong></td><td>${p.brand}</td>
+      <td><span class="badge">${p.category}</span></td>
+      <td>${p.min_price} €</td><td>${p.max_price} €</td>
+      <td><strong>${p.avg_price} €</strong></td><td>${p.price_std} €</td>
+      <td style="color:${rc}"><strong>${p.avg_stars} ★</strong></td>
+      <td>${Number(p.total_reviews).toLocaleString()}</td>
+      <td>${p.competitor_count}</td></tr>`);
+  });
+
+  new Chart(document.getElementById("chart-price-range"), {
+    type:"bar",
+    data:{
+      labels: stats.map(p=>p.name.length>18?p.name.slice(0,18)+"…":p.name),
+      datasets:[
+        {label:"Prix min (€)",data:stats.map(p=>p.min_price),backgroundColor:"#10b981aa",borderRadius:4},
+        {label:"Prix moy (€)",data:stats.map(p=>p.avg_price),backgroundColor:"#8b5cf6aa",borderRadius:4},
+        {label:"Prix max (€)",data:stats.map(p=>p.max_price),backgroundColor:"#ef4444aa",borderRadius:4},
+      ]
+    },
+    options: darkBarOptions("Prix (€)")
+  });
+
+  new Chart(document.getElementById("chart-stars"), {
+    type:"bar",
+    data:{
+      labels:stats.map(p=>p.name.length>16?p.name.slice(0,16)+"…":p.name),
+      datasets:[{
+        label:"Note moyenne",
+        data:stats.map(p=>p.avg_stars),
+        backgroundColor:stats.map(p=>p.avg_stars>=4?"#10b981":p.avg_stars>=3?"#f59e0b":"#ef4444"),
+        borderRadius:6
+      }]
+    },
+    options:{...darkBarOptions("Note /5"),scales:{...darkBarOptions().scales,y:{...darkBarOptions().scales?.y,min:0,max:5}}}
+  });
+
+  const cats = await fetchJSON("/api/price-by-category");
+  new Chart(document.getElementById("chart-cat2"), {
+    type:"polarArea",
+    data:{
+      labels:cats.map(c=>c.category),
+      datasets:[{data:cats.map(c=>c.avg_price),backgroundColor:GRAD_COLORS.map(c=>c+"bb"),borderColor:GRAD_COLORS,borderWidth:1}]
+    },
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{position:"right",labels:{color:"#e2e8f0",font:{family:"Inter"}}}},
+      scales:{r:{grid:{color:"#ffffff11"},ticks:{color:"#94a3b8",backdropColor:"transparent"}}}}
+  });
+
+  _allCompPrices = await fetchJSON("/api/competitor-prices");
+  const sel = document.getElementById("product-select");
+  [...new Set(_allCompPrices.map(r=>r.product_name))].forEach(n=>sel.insertAdjacentHTML("beforeend",`<option value="${n}">${n}</option>`));
+  renderCompetitorChart();
+})();
+
+function renderCompetitorChart(){
+  const sel=document.getElementById("product-select").value;
+  let data=_allCompPrices;
+  if(sel) data=data.filter(r=>r.product_name===sel);
+  const competitors=[...new Set(data.map(r=>r.competitor))].sort();
+  const products=[...new Set(data.map(r=>r.product_name))];
+  const datasets=sel
+    ?[{label:sel,data:data.map(r=>r.avg_price),backgroundColor:GRAD_COLORS.slice(0,data.length),borderRadius:6}]
+    :competitors.map((comp,i)=>({
+        label:comp,
+        data:products.map(prod=>{const e=data.find(r=>r.product_name===prod&&r.competitor===comp);return e?e.avg_price:null;}),
+        backgroundColor:GRAD_COLORS[i%GRAD_COLORS.length]+"cc",borderRadius:4
+      }));
+  if(_competitorChart) _competitorChart.destroy();
+  _competitorChart=new Chart(document.getElementById("chart-competitor-comp"),{
+    type:"bar",
+    data:{labels:sel?competitors:products.map(n=>n.length>14?n.slice(0,14)+"…":n),datasets},
+    options:darkBarOptions("Prix (€)")
+  });
+}
+</script>
+{% endblock %}

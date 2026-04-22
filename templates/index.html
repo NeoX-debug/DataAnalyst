@@ -1,0 +1,170 @@
+{% extends "base.html" %}
+{% block title %}Dashboard · DataAnalyst{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+
+{% block content %}
+<!-- KPI Cards -->
+<div class="kpi-grid" id="kpi-grid">
+  <div class="kpi-card">
+    <div class="kpi-icon" style="--c:#8b5cf6"><i data-lucide="package"></i></div>
+    <div class="kpi-body">
+      <div class="kpi-value" id="kv-products">—</div>
+      <div class="kpi-label">Produits</div>
+    </div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-icon" style="--c:#06b6d4"><i data-lucide="building-2"></i></div>
+    <div class="kpi-body">
+      <div class="kpi-value" id="kv-competitors">—</div>
+      <div class="kpi-label">Concurrents</div>
+    </div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-icon" style="--c:#10b981"><i data-lucide="message-circle"></i></div>
+    <div class="kpi-body">
+      <div class="kpi-value" id="kv-reviews">—</div>
+      <div class="kpi-label">Avis collectés</div>
+    </div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-icon" style="--c:#f59e0b"><i data-lucide="star"></i></div>
+    <div class="kpi-body">
+      <div class="kpi-value" id="kv-rating">—</div>
+      <div class="kpi-label">Note moyenne</div>
+    </div>
+  </div>
+</div>
+
+<!-- Charts row -->
+<div class="charts-row">
+  <div class="card chart-card">
+    <div class="card-header">
+      <h2 class="card-title"><i data-lucide="layers"></i> Prix moyen par catégorie</h2>
+    </div>
+    <div class="chart-wrap">
+      <canvas id="chart-category"></canvas>
+    </div>
+  </div>
+  <div class="card chart-card">
+    <div class="card-header">
+      <h2 class="card-title"><i data-lucide="pie-chart"></i> Distribution des notes</h2>
+    </div>
+    <div class="chart-wrap">
+      <canvas id="chart-ratings"></canvas>
+    </div>
+  </div>
+</div>
+
+<!-- Top Products -->
+<div class="card">
+  <div class="card-header">
+    <h2 class="card-title"><i data-lucide="award"></i> Top 5 Produits</h2>
+  </div>
+  <div class="table-wrap">
+    <table class="data-table" id="top-table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Produit</th>
+          <th>Marque</th>
+          <th>Catégorie</th>
+          <th>Note moy.</th>
+          <th>Nb Avis</th>
+          <th>Prix moy.</th>
+        </tr>
+      </thead>
+      <tbody id="top-tbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Competitor avg prices -->
+<div class="card">
+  <div class="card-header">
+    <h2 class="card-title"><i data-lucide="dollar-sign"></i> Prix moyen par concurrent</h2>
+  </div>
+  <div class="chart-wrap" style="height:280px">
+    <canvas id="chart-competitors"></canvas>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(async () => {
+  // KPIs
+  const kpis = await fetchJSON("/api/kpis");
+  document.getElementById("kv-products").textContent    = kpis.total_products ?? "—";
+  document.getElementById("kv-competitors").textContent = kpis.total_competitors ?? "—";
+  document.getElementById("kv-reviews").textContent     = kpis.total_reviews?.toLocaleString() ?? "—";
+  document.getElementById("kv-rating").textContent      = kpis.avg_rating ? kpis.avg_rating + " ★" : "—";
+
+  // Category chart
+  const cats = await fetchJSON("/api/price-by-category");
+  new Chart(document.getElementById("chart-category"), {
+    type: "bar",
+    data: {
+      labels: cats.map(c => c.category),
+      datasets: [{
+        label: "Prix moyen (€)",
+        data: cats.map(c => c.avg_price),
+        backgroundColor: GRAD_COLORS.slice(0, cats.length),
+        borderRadius: 8,
+      }]
+    },
+    options: darkBarOptions("Prix moyen (€)")
+  });
+
+  // Ratings distribution
+  const ratings = await fetchJSON("/api/ratings-distribution");
+  new Chart(document.getElementById("chart-ratings"), {
+    type: "doughnut",
+    data: {
+      labels: ratings.map(r => r.range_label),
+      datasets: [{
+        data: ratings.map(r => r.count),
+        backgroundColor: GRAD_COLORS,
+        borderWidth: 2,
+        borderColor: "#0d0d1a"
+      }]
+    },
+    options: { ...darkDoughnutOptions(), plugins: { legend: { position: "right", labels: { color: "#e2e8f0", font: { family: "Inter" } } } } }
+  });
+
+  // Top products
+  const top = await fetchJSON("/api/top-products?limit=5");
+  const tbody = document.getElementById("top-tbody");
+  top.forEach((p, i) => {
+    const stars = "★".repeat(Math.round(p.avg_stars)) + "☆".repeat(5 - Math.round(p.avg_stars));
+    tbody.insertAdjacentHTML("beforeend", `
+      <tr>
+        <td><span class="rank rank-${i+1}">${i+1}</span></td>
+        <td><strong>${p.name}</strong></td>
+        <td>${p.brand}</td>
+        <td><span class="badge">${p.category}</span></td>
+        <td><span class="stars">${stars}</span> ${p.avg_stars}</td>
+        <td>${Number(p.total_reviews).toLocaleString()}</td>
+        <td>${p.avg_price} €</td>
+      </tr>`);
+  });
+
+  // Competitor bar
+  const comps = await fetchJSON("/api/competitor-avg");
+  new Chart(document.getElementById("chart-competitors"), {
+    type: "bar",
+    data: {
+      labels: comps.map(c => c.competitor),
+      datasets: [{
+        label: "Prix moyen (€)",
+        data: comps.map(c => c.avg_price),
+        backgroundColor: ["#8b5cf6","#06b6d4","#10b981","#f59e0b","#ef4444"],
+        borderRadius: 8,
+      }]
+    },
+    options: darkBarOptions("Prix moyen (€)")
+  });
+
+  refreshIcons();
+})();
+</script>
+{% endblock %}

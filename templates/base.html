@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}DataAnalyst{% endblock %}</title>
+  <meta name="description" content="Plateforme d'analyse de prix produits et classification ML">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+</head>
+<body>
+  <div class="app-layout">
+
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-brand">
+        <div class="brand-icon">
+          <i data-lucide="bar-chart-2"></i>
+        </div>
+        <span class="brand-name">DataAnalyst</span>
+      </div>
+
+      <nav class="sidebar-nav">
+        <a href="/" class="nav-item {% if request.path == '/' %}active{% endif %}" id="nav-dashboard">
+          <span class="nav-icon"><i data-lucide="home"></i></span>
+          <span class="nav-label">Dashboard</span>
+        </a>
+        <a href="/collect" class="nav-item {% if request.path == '/collect' %}active{% endif %}" id="nav-collect">
+          <span class="nav-icon"><i data-lucide="plus-circle"></i></span>
+          <span class="nav-label">Collecte</span>
+        </a>
+        <a href="/analysis" class="nav-item {% if request.path == '/analysis' %}active{% endif %}" id="nav-analysis">
+          <span class="nav-icon"><i data-lucide="trending-up"></i></span>
+          <span class="nav-label">Analyse</span>
+        </a>
+        <a href="/classify" class="nav-item {% if request.path == '/classify' %}active{% endif %}" id="nav-classify">
+          <span class="nav-icon"><i data-lucide="cpu"></i></span>
+          <span class="nav-label">Classification</span>
+        </a>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="sidebar-footer-text">v1.0 · SQLite + Flask</div>
+      </div>
+    </aside>
+
+    <!-- Main -->
+    <main class="main-content">
+      <div class="topbar">
+        <div class="topbar-title">{% block page_title %}Dashboard{% endblock %}</div>
+        <div class="topbar-right">
+          <div class="status-dot"></div>
+          <span class="status-text">Base active</span>
+        </div>
+      </div>
+
+      <div class="page-body">
+        {% block content %}{% endblock %}
+      </div>
+    </main>
+
+  </div>
+
+  <div id="toast-container"></div>
+  <script src="/static/app.js"></script>
+  {% block scripts %}{% endblock %}
+  <script>
+    document.addEventListener("DOMContentLoaded", () => lucide.createIcons());
+  </script>
+</body>
+</html>
